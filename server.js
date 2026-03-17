@@ -393,7 +393,7 @@ app.post("/auth/forgot-password", async (req, res) => {
 
     // Generate reset token (you can later verify it)
     const token = jwt.sign({ email }, process.env.JWT_SECRET || "fallback_secret", { expiresIn: "15m" });
-    const resetLink = `http://localhost:5501/citizen_reset_password.html?token=${token}`;
+    const resetLink = `http://https://gilded-banoffee-8eaa77.netlify.app/citizen_reset_password.html?token=${token}`;
 
     // Send reset email
     await sendMail(
