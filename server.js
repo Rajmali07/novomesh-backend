@@ -49,7 +49,7 @@ const sendMail = async (to, subject, html) => {
 
     const transporter = nodemailer.createTransport({
   host: process.env.MAIL_HOST,
-  port: Number(process.env.MAIL_PORT),
+  port: process.env.MAIL_PORT,
   secure: false,
       auth: {
         user: process.env.MAIL_USER,
@@ -301,11 +301,10 @@ app.post("/auth/signup", async (req, res) => {
   await sendMail(
     email,
     "🎉 Welcome to Clean City Portal!",
-    `<h2>Hello ${username || "Citizen"}!</h2>
-    <p>Thank you for registering at Clean City Portal.</p>`
+    `<h2>Hello ${username || "Citizen"}!</h2> ...`
   );
-} catch (err) {
-  console.log("⚠️ Email failed but signup continues:", err.message);
+} catch (mailErr) {
+  console.log("Mail failed but signup continues:", mailErr.message);
 }
 
     respond(res, 201, "Account created successfully!");
@@ -394,7 +393,7 @@ app.post("/auth/forgot-password", async (req, res) => {
 
     // Generate reset token (you can later verify it)
     const token = jwt.sign({ email }, process.env.JWT_SECRET || "fallback_secret", { expiresIn: "15m" });
-    const resetLink = `https://gilded-banoffee-8eaa77.netlify.app/citizen_reset_password.html?token=${token}`;
+    const resetLink = `http://https://gilded-banoffee-8eaa77.netlify.app/citizen_reset_password.html?token=${token}`;
 
     // Send reset email
     await sendMail(
@@ -1003,14 +1002,14 @@ async function roleLogin(req, res, roleName) {
     const { email, password } = req.body;
     if (!email || !password) return respond(res, 400, "Email & Password required");
 
-    const { data: user, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("email", email)
-      .eq("role", roleName)
-      .single();
+    const { data: user, error }   = await supabase
+  .from("users")
+  .select("*")
+  .eq("email", email)
+  .eq("role", roleName)
+  .maybeSingle();
 
-    if (error || !user) return respond(res, 401, `${roleName} not found`);
+if (!user) return respond(res, 401, `${roleName} not found`);
 
     const valid = await comparePassword(password, user.password);
     if (!valid) return respond(res, 401, "Incorrect password");
