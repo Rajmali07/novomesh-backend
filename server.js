@@ -49,7 +49,7 @@ const sendMail = async (to, subject, html) => {
 
     const transporter = nodemailer.createTransport({
   host: process.env.MAIL_HOST,
-  port: process.env.MAIL_PORT,
+  port: Number(process.env.MAIL_PORT),
   secure: false,
       auth: {
         user: process.env.MAIL_USER,
@@ -297,15 +297,16 @@ app.post("/auth/signup", async (req, res) => {
     if (error) throw error;
 
     // 🟢 Send welcome email via Mailtrap
-    await sendMail(
-      email,
-      "🎉 Welcome to Clean City Portal!",
-      `<h2>Hello ${username || "Citizen"}!</h2>
-      <p>Thank you for registering at <strong>Clean City Portal</strong>.</p>
-      <p>You can now log in using your registered email address and start reporting civic issues easily.</p>
-      <br/>
-      <p style="color: #28a745; font-weight: bold;">Let's make our city cleaner together!</p>`
-    );
+    try {
+  await sendMail(
+    email,
+    "🎉 Welcome to Clean City Portal!",
+    `<h2>Hello ${username || "Citizen"}!</h2>
+    <p>Thank you for registering at Clean City Portal.</p>`
+  );
+} catch (err) {
+  console.log("⚠️ Email failed but signup continues:", err.message);
+}
 
     respond(res, 201, "Account created successfully!");
   } catch (err) {
@@ -393,7 +394,7 @@ app.post("/auth/forgot-password", async (req, res) => {
 
     // Generate reset token (you can later verify it)
     const token = jwt.sign({ email }, process.env.JWT_SECRET || "fallback_secret", { expiresIn: "15m" });
-    const resetLink = `http://https://gilded-banoffee-8eaa77.netlify.app/citizen_reset_password.html?token=${token}`;
+    const resetLink = `https://gilded-banoffee-8eaa77.netlify.app/citizen_reset_password.html?token=${token}`;
 
     // Send reset email
     await sendMail(
