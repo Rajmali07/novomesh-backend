@@ -20,10 +20,10 @@ console.log("SUPABASE_SERVICE_ROLE_KEY:", process.env.SUPABASE_SERVICE_ROLE_KEY 
 console.log("MAILTRAP CONFIG:", process.env.MAIL_HOST, process.env.MAIL_USER ? "✅ Loaded" : "❌ Missing");
 app.use(cors({
   origin: [
-    "http://127.0.0.1:5500",   // local (Live Server)
-    "http://localhost:5500",
-    "https://gilded-banoffee-8eaa77.netlify.app"  // 🔥 replace this
-  ],
+  "http://127.0.0.1:5500",
+  "http://localhost:5500",
+  "https://swachraipur.netlify.app"
+],
   methods: ["GET","POST","PUT","DELETE"],
   credentials: true
 }));
