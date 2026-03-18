@@ -19,12 +19,15 @@ const PORT = process.env.PORT || 5000;
 console.log("SUPABASE_SERVICE_ROLE_KEY:", process.env.SUPABASE_SERVICE_ROLE_KEY ? "✅ Loaded" : "❌ MISSING");
 console.log("MAILTRAP CONFIG:", process.env.MAIL_HOST, process.env.MAIL_USER ? "✅ Loaded" : "❌ Missing");
 app.use(cors({
-  origin: true,
+  origin: [
+    "http://127.0.0.1:5500",   // local (Live Server)
+    "http://localhost:5500",
+    "https://gilded-banoffee-8eaa77.netlify.app"  // 🔥 replace this
+  ],
   methods: ["GET","POST","PUT","DELETE"],
   credentials: true
 }));
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "frontend")));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.get("/test-mail", async (req, res) => {
@@ -51,11 +54,11 @@ const sendMail = async (to, subject, html) => {
   host: process.env.MAIL_HOST,
   port: process.env.MAIL_PORT,
   secure: false,
-      auth: {
-        user: process.env.MAIL_USER,
-        pass: process.env.MAIL_PASS
-      }
-    });
+  auth: {
+    user: process.env.MAIL_USER,
+    pass: process.env.MAIL_PASS
+  }
+});
 
     const info = await transporter.sendMail({
       from: '"Swach Raipur" <no-reply@swachraipur.com>',
@@ -91,7 +94,7 @@ const verifyAdmin = (req, res, next) => {
 
   const token = authHeader.split(" ")[1];
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "fallback_secret");
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     if (decoded.role !== "admin") return respond(res, 403, "Access denied");
     req.user = decoded;
     next();
@@ -257,7 +260,7 @@ app.get("/api/v1/civic_reports/:email", async (req, res) => {
     const { data, error } = await supabase
       .from("civic_reports")
       .select("*")
-      .eq("email", email)
+      .eq("email", email.toLowerCase())
       .order("created_at", { ascending: false });
 
     if (error) throw error;
@@ -286,14 +289,14 @@ app.post("/auth/signup", async (req, res) => {
     const { data: existing } = await supabase
       .from("users")
       .select("*")
-      .eq("email", email)
+      .eq("email", email.toLowerCase())
       .maybeSingle();
     if (existing) return respond(res, 400, "User already exists");
 
     const hashed = await hashPassword(password);
     const { error } = await supabase
       .from("users")
-      .insert([{ email, username, password: hashed, role }]);
+      .insert([{ email: email.toLowerCase(), username, password: hashed, role }]);
     if (error) throw error;
 
     // 🟢 Send welcome email via Mailtrap
@@ -320,12 +323,25 @@ app.post("/auth/login", async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return respond(res, 400, "Email and password required");
 
-    const { data: user, error } = await supabase.from("users").select("*").eq("email", email).single();
+    const { data: user, error } = await supabase.from("users").select("*").eq("email", email.toLowerCase()).single();
     if (error || !user) return respond(res, 404, "User not found");
 
     if (!(await comparePassword(password, user.password))) return respond(res, 401, "Invalid credentials");
+    const token = jwt.sign(
+  { id: user.id, email: user.email, role: user.role },
+  process.env.JWT_SECRET,
+  { expiresIn: "1d" }
+);
 
-    respond(res, 200, "Login successful!", { user: { id: user.id, email, username: user.username, role: user.role } });
+    respond(res, 200, "Login successful!", {
+  token,
+  user: {
+    id: user.id,
+    email,
+    username: user.username,
+    role: user.role
+  }
+});
   } catch {
     respond(res, 500, "Server error during login");
   }
@@ -388,12 +404,12 @@ app.post("/auth/forgot-password", async (req, res) => {
     if (!email) return respond(res, 400, "Email required");
 
     // Check if user exists
-    const { data: user, error } = await supabase.from("users").select("*").eq("email", email).single();
+    const { data: user, error } = await supabase.from("users").select("*").eq("email", email.toLowerCase()).single();
     if (error || !user) return respond(res, 404, "No user found with this email");
 
     // Generate reset token (you can later verify it)
-    const token = jwt.sign({ email }, process.env.JWT_SECRET || "fallback_secret", { expiresIn: "15m" });
-    const resetLink = `http://https://gilded-banoffee-8eaa77.netlify.app/citizen_reset_password.html?token=${token}`;
+    const token = jwt.sign({ email }, process.env.JWT_SECRET, { expiresIn: "15m" });
+    const resetLink = `https://gilded-banoffee-8eaa77.netlify.app/citizen_reset_password.html?token=${token}`;
 
     // Send reset email
     await sendMail(
@@ -416,7 +432,7 @@ app.post("/auth/forgot-password", async (req, res) => {
 app.get("/api/v1/citizen/:email", async (req, res) => {
   try {
     const { email } = req.params;
-    const { data, error } = await supabase.from("users").select("*").eq("email", email).single();
+    const { data, error } = await supabase.from("users").select("*").eq("email", email.toLowerCase()).single();
     if (error || !data) return respond(res, 404, "Citizen not found");
     res.json({ user: data });
   } catch {
@@ -473,7 +489,7 @@ app.post("/auth/send-otp", otpLimiter, async (req, res) => {
     await supabase
   .from("email_otps")
   .delete()
-  .eq("email", email);
+  .eq("email", email.toLowerCase());
 
     const otp = generateOtp();
     const hashedOtp = await hashPassword(otp);
@@ -506,7 +522,7 @@ app.post("/auth/verify-otp", async (req, res) => {
     const { data, error } = await supabase
       .from("email_otps")
       .select("*")
-      .eq("email", email)
+      .eq("email", email.toLowerCase())
       .order("id", { ascending: false })
 .limit(1);
 
@@ -549,13 +565,13 @@ app.put("/api/v1/citizen/password", async (req, res) => {
     const { email, currentPassword, newPassword } = req.body;
     if (!email || !currentPassword || !newPassword) return respond(res, 400, "Missing fields");
 
-    const { data: user, error } = await supabase.from("users").select("*").eq("email", email).single();
+    const { data: user, error } = await supabase.from("users").select("*").eq("email", email.toLowerCase()).single();
     if (error || !user) return respond(res, 404, "User not found");
 
     if (!(await comparePassword(currentPassword, user.password))) return respond(res, 401, "Current password incorrect");
 
     const hashed = await hashPassword(newPassword);
-    const { error: updateErr } = await supabase.from("users").update({ password: hashed }).eq("email", email);
+    const { error: updateErr } = await supabase.from("users").update({ password: hashed }).eq("email", email.toLowerCase());
     if (updateErr) throw updateErr;
 
     respond(res, 200, "Password updated successfully!");
@@ -606,8 +622,8 @@ app.post("/api/v1/reports/civic", upload.single("photo"), async (req, res) => {
     .normalize("NFD")                  // Fix special encoding like â, å, etc.
     .replace(/\s+/g, "_")              // Replace spaces with underscores
     .replace(/[^\w.-]/g, "");          // Remove all invalid characters
-
-  const fileName = `photo_${Date.now()}_${cleanName}`;
+    
+    const fileName = `photo_${Date.now()}_${Math.random()}_${cleanName}`;
   console.log("🧾 Cleaned filename:", fileName);
 
   const { error: uploadError } = await supabase.storage
@@ -740,7 +756,7 @@ app.get("/api/v1/driver/profile", async (req, res) => {
     const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(
       token,
-      process.env.JWT_SECRET || "fallback_secret"
+      process.env.JWT_SECRET
     );
 
     const { data, error } = await supabase
@@ -773,7 +789,7 @@ app.put("/api/v1/driver/profile", async (req, res) => {
     const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(
       token,
-      process.env.JWT_SECRET || "fallback_secret"
+      process.env.JWT_SECRET
     );
 
     const { username, phone } = req.body;
@@ -817,7 +833,7 @@ app.put("/api/v1/driver/password", async (req, res) => {
     const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(
       token,
-      process.env.JWT_SECRET || "fallback_secret"
+      process.env.JWT_SECRET
     );
 
     const { currentPassword, newPassword } = req.body;
@@ -880,7 +896,7 @@ app.get("/api/v1/driver/tasks", async (req, res) => {
 
     const decoded = jwt.verify(
       token,
-      process.env.JWT_SECRET || "fallback_secret"
+      process.env.JWT_SECRET
     );
 
     const driverId = decoded.id;
@@ -1005,7 +1021,7 @@ async function roleLogin(req, res, roleName) {
     const { data: user, error }   = await supabase
   .from("users")
   .select("*")
-  .eq("email", email)
+  .eq("email", email.toLowerCase())
   .eq("role", roleName)
   .maybeSingle();
 
@@ -1017,7 +1033,7 @@ if (!user) return respond(res, 401, `${roleName} not found`);
     // ✅ Create a token
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET || "fallback_secret",
+      process.env.JWT_SECRET,
       { expiresIn: "1d" }
     );
 
