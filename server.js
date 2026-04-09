@@ -23,7 +23,7 @@ app.use(cors({
   "http://127.0.0.1:5500",
   "http://localhost:5500",
   "https://swachraipur.netlify.app",
-  "https://main.d1t7oc4snqavd.amplifyapp.com"
+  "https://main.d1hb0q15rgvfet.amplifyapp.com"
 ],
   methods: ["GET","POST","PUT","DELETE"],
   credentials: true
